@@ -2,6 +2,7 @@ import argparse
 import logging
 import sys
 from dataclasses import dataclass
+from datetime import date
 
 from config.settings import Settings, get_settings
 from database.database import Database
@@ -66,7 +67,16 @@ def parse_args() -> argparse.Namespace:
     actions.add_argument("--status", action="store_true")
     actions.add_argument("--test-gmail", action="store_true")
     actions.add_argument("--test-client", type=int, metavar="CLIENT_ID")
-    return parser.parse_args()
+    parser.add_argument(
+        "--date",
+        type=date.fromisoformat,
+        metavar="YYYY-MM-DD",
+        help="Date to inspect with --test-client (defaults to the client's local today)",
+    )
+    args = parser.parse_args()
+    if args.date is not None and args.test_client is None:
+        parser.error("--date can only be used with --test-client")
+    return args
 
 
 def setup(app: Application) -> int:
@@ -130,16 +140,19 @@ def print_status(app: Application) -> int:
     return 0
 
 
-def test_client(app: Application, client_id: int) -> int:
+def test_client(
+    app: Application, client_id: int, check_date: date | None = None
+) -> int:
     client = app.clients.get(client_id)
     if client is None:
         print(f"Client {client_id} was not found.", file=sys.stderr)
         return 1
+    target_date = check_date or today_in_timezone(client.timezone)
     result = app.checker.check(
         client.id or client_id,
         client.google_profile_url,
         client.business_name,
-        today_in_timezone(client.timezone),
+        target_date,
         client.timezone,
     )
     print(f"Browser test result: {result.outcome.value}")
@@ -169,7 +182,7 @@ def main() -> int:
         print(f"Gmail API connection successful for {account}. No email was sent.")
         return 0
     if args.test_client is not None:
-        return test_client(app, args.test_client)
+        return test_client(app, args.test_client, args.date)
 
     ClientScheduler(app.clients, app.workflow).run()
     return 0

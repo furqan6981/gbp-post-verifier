@@ -85,6 +85,13 @@ automation will never attempt to bypass it.
 `--test-client` checks detection and screenshot behavior only. It does not
 create a Gmail draft.
 
+To inspect a historical post during testing without creating a draft, provide
+the date explicitly:
+
+```bash
+python main.py --test-client 1 --date 2026-08-14
+```
+
 ## Add clients
 
 Use IANA timezone names and a 24-hour local check time:

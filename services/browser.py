@@ -71,38 +71,48 @@ class BrowserService:
         return any(phrase.lower() in text for phrase in phrases)
 
     def ensure_authenticated(self, page: Page) -> None:
-        if self._page_contains(page, SECURITY_CHALLENGE_TEXT):
-            raise SecurityChallengeError(
-                "Google displayed a CAPTCHA/security challenge. Complete it manually; "
-                "the application will not bypass it."
-            )
-
+        security_challenge = self._page_contains(page, SECURITY_CHALLENGE_TEXT)
         login_url = "accounts.google." in page.url
-        if not login_url and not self._page_contains(page, LOGIN_TEXT):
+        login_prompt = self._page_contains(page, LOGIN_TEXT)
+        if not security_challenge and not login_url and not login_prompt:
             return
+
         if self.headless:
+            if security_challenge:
+                raise SecurityChallengeError(
+                    "Google displayed a CAPTCHA/security challenge. Set HEADLESS=false "
+                    "and run --test-client to complete it manually."
+                )
             raise LoginRequiredError(
                 "Google login is required. Set HEADLESS=false and run --test-client "
                 "to complete login manually."
             )
 
-        logger.warning(
-            "Google login is required. Complete login in the open browser window. "
-            "No password is stored by this application.",
-            extra={"event": "manual_login_required"},
-        )
+        if security_challenge:
+            logger.warning(
+                "Google displayed a security challenge. Complete it in the open browser "
+                "window; the application will wait but will not bypass it.",
+                extra={"event": "security_challenge"},
+            )
+        else:
+            logger.warning(
+                "Google login is required. Complete login in the open browser window. "
+                "No password is stored by this application.",
+                extra={"event": "manual_login_required"},
+            )
+
         deadline = time.monotonic() + self.manual_login_timeout_seconds
         while time.monotonic() < deadline:
             page.wait_for_timeout(2000)
-            if self._page_contains(page, SECURITY_CHALLENGE_TEXT):
-                logger.warning(
-                    "A Google security challenge needs manual completion.",
-                    extra={"event": "security_challenge"},
-                )
-                continue
-            if "accounts.google." not in page.url and not self._page_contains(
-                page, LOGIN_TEXT
-            ):
+            security_challenge = self._page_contains(page, SECURITY_CHALLENGE_TEXT)
+            login_url = "accounts.google." in page.url
+            login_prompt = self._page_contains(page, LOGIN_TEXT)
+            if not security_challenge and not login_url and not login_prompt:
                 logger.info("Manual Google login completed", extra={"event": "login_complete"})
                 return
+
+        if security_challenge:
+            raise SecurityChallengeError(
+                "Timed out waiting for the Google security challenge to be completed"
+            )
         raise LoginRequiredError("Timed out waiting for manual Google login")
