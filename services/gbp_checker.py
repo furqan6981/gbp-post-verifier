@@ -195,7 +195,7 @@ class GoogleBusinessProfileChecker:
         # nested divs rather than articles. Start from their visible relative
         # timestamp and climb to the nearest substantial image-backed card.
         relative_pattern = re.compile(
-            r"\b(?:yesterday|\d+\s+(?:minute|hour|day)s?\s+ago)\b",
+            r"\b(?:yesterday|\d+\s+(?:minutes?|mins?|hours?|hrs?|days?)\s+ago)\b",
             re.I,
         )
         try:
@@ -316,12 +316,14 @@ class GoogleBusinessProfileChecker:
         days_ago = re.search(r"\b(\d+)\s+days?\s+ago\b", lowered)
         if days_ago:
             return local_today - timedelta(days=int(days_ago.group(1))) == target
-        relative = re.search(r"\b(\d+)\s+(minute|hour)s?\s+ago\b", lowered)
+        relative = re.search(
+            r"\b(\d+)\s+(minutes?|mins?|hours?|hrs?)\s+ago\b", lowered
+        )
         if relative:
             amount = int(relative.group(1))
             delta = (
                 timedelta(minutes=amount)
-                if relative.group(2) == "minute"
+                if relative.group(2).startswith("min")
                 else timedelta(hours=amount)
             )
             published = datetime.now(ZoneInfo(timezone_name)) - delta

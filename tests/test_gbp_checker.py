@@ -44,3 +44,13 @@ def test_days_ago_matches_relative_local_date() -> None:
     assert GoogleBusinessProfileChecker._card_matches_date(
         card, today - timedelta(days=2), timezone_name  # type: ignore[arg-type]
     )
+
+
+def test_abbreviated_minutes_match_current_local_date() -> None:
+    timezone_name = "Asia/Karachi"
+    today = datetime.now(ZoneInfo(timezone_name)).date()
+    card = TextCard("Posted 20 mins ago")
+
+    assert GoogleBusinessProfileChecker._card_matches_date(
+        card, today, timezone_name  # type: ignore[arg-type]
+    )
