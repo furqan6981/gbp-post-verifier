@@ -91,9 +91,9 @@ class GoogleBusinessProfileChecker:
                         CheckOutcome.NOT_FOUND,
                         message=f"No verifiable post dated {check_date.isoformat()} was found",
                     )
-                post = self._open_post_detail(page, post)
+                self._open_post_detail(page, post)
                 screenshot = self.screenshots.capture(
-                    page, post, business_name, client_id, check_date
+                    page, None, business_name, client_id, check_date
                 )
                 logger.info(
                     "Published post verified and screenshot captured",
