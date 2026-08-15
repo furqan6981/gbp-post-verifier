@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 from config.settings import Settings
@@ -12,9 +13,11 @@ class FakeChecker:
     def __init__(self, results: list[CheckerResult]):
         self.results = iter(results)
         self.calls = 0
+        self.check_dates: list[date] = []
 
     def check(self, *_args: object) -> CheckerResult:
         self.calls += 1
+        self.check_dates.append(_args[3])  # type: ignore[arg-type]
         return next(self.results)
 
 
@@ -151,3 +154,33 @@ def test_reconciles_existing_gmail_draft_without_rechecking_browser(
     assert result.gmail_draft_id == "recovered-draft"
     assert checker.calls == 0
     assert gmail.calls == 0
+
+
+def test_historical_date_override_creates_draft_for_requested_date(
+    tmp_path: Path,
+    client_repository: ClientRepository,
+    check_repository: CheckRepository,
+    sample_client: Client,
+) -> None:
+    client = client_repository.add(sample_client)
+    screenshot = tmp_path / "historical-post.png"
+    screenshot.write_bytes(b"png")
+    checker = FakeChecker(
+        [CheckerResult(CheckOutcome.PUBLISHED, screenshot_path=str(screenshot))]
+    )
+    gmail = FakeGmail()
+    workflow = VerificationWorkflow(
+        make_settings(tmp_path),
+        check_repository,
+        checker,  # type: ignore[arg-type]
+        gmail,  # type: ignore[arg-type]
+        sleeper=lambda _seconds: None,
+    )
+    requested_date = date(2026, 8, 14)
+
+    result = workflow.run_client(client, requested_date)
+
+    assert result.status == CheckStatus.DRAFT_CREATED
+    assert result.check_date == requested_date
+    assert checker.check_dates == [requested_date]
+    assert gmail.calls == 1

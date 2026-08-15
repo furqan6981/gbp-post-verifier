@@ -3,6 +3,7 @@ import logging
 import mimetypes
 import os
 from email.message import EmailMessage
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -64,6 +65,14 @@ class GmailService:
         if message_id:
             message["Message-ID"] = message_id
         message.set_content(body)
+        html_body = escape(body).replace("\n", "<br>\n")
+        message.add_alternative(
+            (
+                '<div style="font-family: Arial, sans-serif; font-size: 20px; '
+                f'font-weight: 700; line-height: 1.5;">{html_body}</div>'
+            ),
+            subtype="html",
+        )
         if attachment is not None:
             self.attach_file(message, attachment)
         return message

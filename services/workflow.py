@@ -38,10 +38,12 @@ class VerificationWorkflow:
         self.gmail = gmail
         self.sleeper = sleeper
 
-    def run_client(self, client: Client) -> DailyPostCheck:
+    def run_client(
+        self, client: Client, check_date: date | None = None
+    ) -> DailyPostCheck:
         if client.id is None:
             raise ValueError("Client must be persisted before it can be processed")
-        check_date = today_in_timezone(client.timezone)
+        check_date = check_date or today_in_timezone(client.timezone)
         check = self.checks.get_or_create(client.id, check_date)
         if check.status == CheckStatus.DRAFT_CREATED and check.gmail_draft_id:
             logger.info(

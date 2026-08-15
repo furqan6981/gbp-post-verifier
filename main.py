@@ -71,11 +71,18 @@ def parse_args() -> argparse.Namespace:
         "--date",
         type=date.fromisoformat,
         metavar="YYYY-MM-DD",
-        help="Date to inspect with --test-client (defaults to the client's local today)",
+        help=(
+            "Date override for --test-client or --run-client "
+            "(defaults to the client's local today)"
+        ),
     )
     args = parser.parse_args()
-    if args.date is not None and args.test_client is None:
-        parser.error("--date can only be used with --test-client")
+    if (
+        args.date is not None
+        and args.test_client is None
+        and args.run_client is None
+    ):
+        parser.error("--date can only be used with --test-client or --run-client")
     return args
 
 
@@ -95,12 +102,14 @@ def setup(app: Application) -> int:
     return 0
 
 
-def run_client(app: Application, client_id: int) -> int:
+def run_client(
+    app: Application, client_id: int, check_date: date | None = None
+) -> int:
     client = app.clients.get(client_id)
     if client is None:
         print(f"Client {client_id} was not found.", file=sys.stderr)
         return 1
-    result = app.workflow.run_client(client)
+    result = app.workflow.run_client(client, check_date)
     print(
         f"{client.client_name}: {result.status.value} "
         f"(attempts={result.attempts})"
@@ -172,7 +181,7 @@ def main() -> int:
     if args.setup:
         return setup(app)
     if args.run_client is not None:
-        return run_client(app, args.run_client)
+        return run_client(app, args.run_client, args.date)
     if args.run_all:
         return run_all(app)
     if args.status:

@@ -92,6 +92,14 @@ the date explicitly:
 python main.py --test-client 1 --date 2026-08-14
 ```
 
+For an explicit end-to-end historical test that also creates a Gmail draft,
+use `--run-client` with the date. This records the requested date in SQLite and
+retains the normal duplicate-draft protection:
+
+```bash
+python main.py --run-client 1 --date 2026-08-14
+```
+
 ## Add clients
 
 Use IANA timezone names and a 24-hour local check time:
