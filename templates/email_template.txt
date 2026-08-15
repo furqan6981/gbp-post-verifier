@@ -1,8 +1,1 @@
-Hi {{client_name}},
-
-Today's Google Business Profile post has been published successfully.
-
-Please find the screenshot attached for confirmation.
-
-Regards,
-{{agency_name}}
+Hi {{client_name}}, this is today's posting on your Google My Business.
