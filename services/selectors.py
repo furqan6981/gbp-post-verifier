@@ -14,6 +14,8 @@ UPDATES_LABELS = (
 )
 
 POST_CARD_SELECTORS = (
+    "[aria-label='Latest from the owner'] [data-post-id]",
+    "[data-post-id]",
     "article",
     "[role='article']",
     "[data-attrid*='post']",

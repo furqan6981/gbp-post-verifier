@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from enum import StrEnum
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 from playwright.sync_api import Locator, Page, TimeoutError as PlaywrightTimeoutError
@@ -90,6 +91,7 @@ class GoogleBusinessProfileChecker:
                         CheckOutcome.NOT_FOUND,
                         message=f"No verifiable post dated {check_date.isoformat()} was found",
                     )
+                post = self._open_post_detail(page, post)
                 screenshot = self.screenshots.capture(
                     page, post, business_name, client_id, check_date
                 )
@@ -189,6 +191,38 @@ class GoogleBusinessProfileChecker:
             except Exception:
                 logger.debug("Post strategy failed: %s", selector, exc_info=True)
 
+        # Current Google Search layouts often render update cards as generic
+        # nested divs rather than articles. Start from their visible relative
+        # timestamp and climb to the nearest substantial image-backed card.
+        relative_pattern = re.compile(
+            r"\b(?:yesterday|\d+\s+(?:minute|hour|day)s?\s+ago)\b",
+            re.I,
+        )
+        try:
+            timestamps = page.get_by_text(relative_pattern)
+            for index in range(min(timestamps.count(), 50)):
+                timestamp = timestamps.nth(index)
+                if not timestamp.is_visible():
+                    continue
+                card = timestamp.locator(
+                    "xpath=ancestor::*["
+                    "(self::article or @role='article' or self::div)"
+                    " and .//img and string-length(normalize-space(.)) >= 80"
+                    "][1]"
+                )
+                if (
+                    card.count()
+                    and card.first.is_visible()
+                    and self._card_matches_date(card.first, target, timezone_name)
+                ):
+                    logger.info(
+                        "Found post from its relative timestamp",
+                        extra={"event": "post_detected"},
+                    )
+                    return card.first
+        except Exception:
+            logger.debug("Relative timestamp strategy failed", exc_info=True)
+
         # Last-resort semantic lookup: find visible date text and use its card ancestor.
         for token in date_tokens(target):
             try:
@@ -205,6 +239,45 @@ class GoogleBusinessProfileChecker:
             except Exception:
                 logger.debug("Date text strategy failed: %s", token, exc_info=True)
         return None
+
+    @staticmethod
+    def _open_post_detail(page: Page, post: Locator) -> Locator:
+        post_id = post.get_attribute("data-post-id")
+        if not post_id:
+            raise RuntimeError(
+                "The matched Google update does not expose a post ID for evidence capture"
+            )
+
+        parts = urlsplit(page.url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        query["lpsid"] = f"pid:{post_id}"
+        detail_url = urlunsplit(
+            (parts.scheme, parts.netloc, parts.path, urlencode(query), "")
+        )
+        page.goto(detail_url, wait_until="domcontentloaded")
+
+        dialog = page.get_by_role("dialog").filter(has_text="Updates").first
+        dialog.wait_for(state="visible")
+        detail = dialog.locator(f'[data-post-id="{post_id}"]').first
+        detail.wait_for(state="visible")
+        detail.locator("[data-content-id]").first.wait_for(state="visible")
+
+        more = detail.get_by_text("More", exact=True)
+        if more.count() and more.first.is_visible():
+            more.first.click()
+            try:
+                more.first.wait_for(state="hidden", timeout=3000)
+            except PlaywrightTimeoutError:
+                logger.info(
+                    "Google kept the post caption collapsed; capturing the opened card",
+                    extra={"event": "post_text_collapsed"},
+                )
+
+        logger.info(
+            "Opened full post detail for evidence capture",
+            extra={"event": "post_detail_opened"},
+        )
+        return detail
 
     @staticmethod
     def _card_matches_date(
@@ -235,10 +308,14 @@ class GoogleBusinessProfileChecker:
 
         combined = " ".join(values).strip()
         lowered = combined.casefold()
+        local_today = datetime.now(ZoneInfo(timezone_name)).date()
         if re.search(r"\b(today|just now)\b", lowered):
-            return datetime.now(ZoneInfo(timezone_name)).date() == target
-        if re.search(r"\b(yesterday|\d+\s+days?\s+ago)\b", lowered):
-            return False
+            return local_today == target
+        if re.search(r"\byesterday\b", lowered):
+            return local_today - timedelta(days=1) == target
+        days_ago = re.search(r"\b(\d+)\s+days?\s+ago\b", lowered)
+        if days_ago:
+            return local_today - timedelta(days=int(days_ago.group(1))) == target
         relative = re.search(r"\b(\d+)\s+(minute|hour)s?\s+ago\b", lowered)
         if relative:
             amount = int(relative.group(1))
