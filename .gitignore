@@ -1,0 +1,11 @@
+.env
+credentials.json
+token.json
+browser_profile/
+data/
+screenshots/
+logs/
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/

@@ -1,0 +1,11 @@
+APScheduler>=3.10,<4
+google-api-python-client>=2.0
+google-auth>=2.0
+google-auth-oauthlib>=1.0
+playwright>=1.40
+pydantic>=2.0
+pydantic-settings>=2.0
+email-validator>=2.0
+filelock>=3.0
+python-dotenv>=1.0
+pytest>=8.0
